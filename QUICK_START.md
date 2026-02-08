@@ -14,7 +14,7 @@ Get your AI News Platform running in 5 minutes!
 ### 1. Clone or Navigate to Project
 
 ```bash
-cd /Users/keigoshimada/Documents/AI_news_platform
+cd /path/to/AI_news_platform   # or wherever you cloned the repo
 ```
 
 ### 2. Run Setup Script

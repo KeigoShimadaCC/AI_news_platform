@@ -1,10 +1,12 @@
-"""RSS connector using feedparser with retry and optional user-agent."""
+"""RSS connector: fetch with aiohttp (controlled UA/headers), parse with feedparser."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List
 
+import aiohttp
 import feedparser
 from tenacity import (
     retry,
@@ -20,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Browser-like UA so more feeds (DeepMind, Zenn, arXiv, Reddit) accept requests
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+ACCEPT_FEED = "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
 
 
 def _parse_entry(entry: Any, source_id: str, default_lang: str) -> Dict[str, Any] | None:
@@ -55,27 +59,34 @@ class RSSConnector:
         self.lang = config.get("lang", "en")
 
     @retry(
-        retry=retry_if_exception_type((OSError, ConnectionError, TimeoutError)),
+        retry=retry_if_exception_type((aiohttp.ClientError, OSError, ConnectionError, TimeoutError)),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=60),
         reraise=True,
     )
     async def fetch(self, source: "Source") -> List[Dict[str, Any]]:
-        """Fetch and parse RSS feed. Runs in executor to avoid blocking."""
-        import asyncio
+        """Fetch feed URL with aiohttp (UA + Accept), then parse body with feedparser."""
         url = self.url or source.config.get("url", "")
         if not url:
             logger.warning("RSS source %s has no url", source.id)
             return []
 
+        user_agent = source.config.get("user_agent") or self.user_agent
+        headers = {
+            "User-Agent": user_agent,
+            "Accept": ACCEPT_FEED,
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status >= 400:
+                    logger.warning("RSS source %s returned %s for %s", source.id, resp.status, url)
+                    resp.raise_for_status()  # so orchestrator records last_error
+                body = await resp.text()
+
         def _parse() -> List[Dict[str, Any]]:
-            feed = feedparser.parse(
-                url,
-                request_headers={"User-Agent": self.user_agent},
-                response_headers=True,
-            )
+            feed = feedparser.parse(body)
             entries = getattr(feed, "entries", [])
-            # Only raise on parse error if we got no entries; minor bozo with entries is OK
             if getattr(feed, "bozo", False) and feed.bozo_exception and not entries:
                 raise feed.bozo_exception
             items: List[Dict[str, Any]] = []

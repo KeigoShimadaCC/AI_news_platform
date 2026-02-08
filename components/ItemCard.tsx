@@ -1,14 +1,23 @@
 import Link from "next/link";
-import { ExternalLink, Clock, BarChart3 } from "lucide-react";
+import { ExternalLink, Clock, BarChart3, Star } from "lucide-react";
 import type { ItemWithMetrics } from "@/lib/types";
-import { cn, truncate, timeAgo, scoreColor, categoryColor } from "@/lib/utils";
+import { cn, truncate, timeAgo, scoreColor, categoryColor, parseSummary } from "@/lib/utils";
 
 interface ItemCardProps {
   item: ItemWithMetrics;
   compact?: boolean;
+  /** If true, show filled star and allow unfavorite */
+  isFavorite?: boolean;
+  /** Called when user clicks favorite toggle */
+  onToggleFavorite?: (itemId: string) => void;
 }
 
-export function ItemCard({ item, compact = false }: ItemCardProps) {
+export function ItemCard({
+  item,
+  compact = false,
+  isFavorite = false,
+  onToggleFavorite,
+}: ItemCardProps) {
   const scorePercent = item.score != null ? Math.round(item.score * 100) : null;
 
   return (
@@ -62,17 +71,42 @@ export function ItemCard({ item, compact = false }: ItemCardProps) {
           </div>
         </div>
 
-        {item.url && (
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-            title="Open original"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        )}
+        <div className="flex flex-shrink-0 items-center gap-0.5">
+          {onToggleFavorite != null && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onToggleFavorite(item.id);
+              }}
+              className={cn(
+                "p-1.5 transition-colors rounded",
+                isFavorite
+                  ? "text-amber-500 hover:text-amber-600"
+                  : "text-gray-300 hover:text-amber-500"
+              )}
+              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star
+                className="h-4 w-4"
+                fill={isFavorite ? "currentColor" : "none"}
+                stroke="currentColor"
+              />
+            </button>
+          )}
+          {item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+              title="Open original"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          )}
+        </div>
       </div>
     </article>
   );

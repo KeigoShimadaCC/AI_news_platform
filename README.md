@@ -257,9 +257,21 @@ Some sources need API keys or tokens for higher rate limits or access. Without t
 | `QIITA_API_TOKEN` | Qiita API connector | Unauthenticated: 60 req/h. With token: 1000 req/h. |
 | `GITHUB_TOKEN` | GitHub Search API connector | Unauthenticated: strict limit; token avoids 403. |
 
+- **GitHub / Qiita**: Without `GITHUB_TOKEN` or `QIITA_API_TOKEN`, those sources stay **Active** with **0 items** (no error). Set the token in `.env` to get items.
 - **RSS sources** (OpenAI, DeepMind, Zenn, Reddit, etc.) generally work without keys; some feeds may block certain clients (we use fallback where configured).
 - **Digest summaries**: With `llm.provider: mock` (default in config), no key is needed; summaries are placeholder. Set `OPENAI_API_KEY` (or Anthropic) and `llm.provider: openai` for real summaries.
 - If a source repeatedly fails, check `/sources` for the error, add the right env var if needed, or disable the source from the Sources page.
+
+### How summarization works
+
+Summaries (“why it matters” for each item) use the **same LLM** for both the daily digest and for **Favorites**:
+
+- **Config** (`config.yaml` → `llm`): `provider` can be `mock`, `openai`, `anthropic`, or `local`.
+- **mock**: No API calls; template-based one-liner (good for testing).
+- **openai** / **anthropic**: Uses `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`; set `llm.model` (e.g. `gpt-4o-mini`).
+- **local**: Talks to an Ollama-compatible API at `llm.local_url` (default `http://localhost:11434/v1`) with `llm.local_model` (e.g. `llama3.2`). Run Ollama locally and start a model to use this.
+
+Favorites store saved items; use **“Generate summaries”** on the Favorites page to run the configured LLM on favorites that don’t have a summary yet (same backend as digest).
 
 ## Troubleshooting
 

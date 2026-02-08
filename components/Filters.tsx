@@ -2,14 +2,35 @@
 
 import type { SearchFilters } from "@/lib/types";
 
+interface SourceOption {
+  id: string;
+  label?: string;
+}
+
 interface FiltersProps {
   filters: SearchFilters;
   onChange: (filters: SearchFilters) => void;
+  /** Optional list of sources for the "Filter by source" dropdown (e.g. arxiv, DeepMind). */
+  sources?: SourceOption[];
 }
 
-export function Filters({ filters, onChange }: FiltersProps) {
+export function Filters({ filters, onChange, sources = [] }: FiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
+      <select
+        value={filters.source || ""}
+        onChange={(e) => onChange({ ...filters, source: e.target.value || undefined })}
+        className="input w-auto"
+        title="Filter by source"
+      >
+        <option value="">All Sources</option>
+        {sources.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label ?? s.id.replace(/_/g, " ")}
+          </option>
+        ))}
+      </select>
+
       <select
         value={filters.category || ""}
         onChange={(e) => onChange({ ...filters, category: e.target.value || undefined })}

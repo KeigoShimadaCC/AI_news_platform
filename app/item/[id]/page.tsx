@@ -9,10 +9,11 @@ import {
   Tag,
   Link2,
 } from "lucide-react";
-import { getItem, getClusterItems } from "@/lib/queries";
+import { getItem, getClusterItems, getFavorites } from "@/lib/queries";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { ItemCard } from "@/components/ItemCard";
-import { formatDate, categoryColor, cn } from "@/lib/utils";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { formatDate, categoryColor, cn, parseSummary } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,12 @@ export default async function ItemPage({ params }: PageProps) {
   const relatedItems = item.cluster_id
     ? getClusterItems(item.cluster_id, item.id)
     : [];
+  const favorites = getFavorites();
+  const isFavorite = favorites.some((f) => f.item_id === item.id);
+
+  const summaryText =
+    (item as { summary?: string }).summary ?? parseSummary(item.summary_json ?? null);
+  const fetchedAt = (item as { fetched_at?: string }).fetched_at ?? item.ingested_at;
 
   return (
     <main>
@@ -64,6 +71,7 @@ export default async function ItemPage({ params }: PageProps) {
             <h1 className="text-xl font-bold text-gray-900 mb-4">{item.title}</h1>
 
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-6">
+              <FavoriteButton itemId={item.id} isFavorite={isFavorite} />
               {item.author && (
                 <span className="flex items-center gap-1">
                   <User className="h-4 w-4" />
@@ -87,12 +95,12 @@ export default async function ItemPage({ params }: PageProps) {
               )}
             </div>
 
-            {item.summary && (
+            {summaryText && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                 <h2 className="text-sm font-medium text-blue-900 mb-1">
                   AI Summary
                 </h2>
-                <p className="text-sm text-blue-800">{item.summary}</p>
+                <p className="text-sm text-blue-800">{summaryText}</p>
               </div>
             )}
 
@@ -145,7 +153,7 @@ export default async function ItemPage({ params }: PageProps) {
               </div>
               <div>
                 <dt className="text-gray-500">Fetched</dt>
-                <dd className="text-gray-700">{formatDate(item.fetched_at)}</dd>
+                <dd className="text-gray-700">{fetchedAt ? formatDate(fetchedAt) : "—"}</dd>
               </div>
               {item.cluster_id && (
                 <div>

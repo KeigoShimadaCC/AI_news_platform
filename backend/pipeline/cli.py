@@ -14,16 +14,22 @@ import asyncio
 import re
 import sys
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import click
 import yaml
+from dotenv import load_dotenv
+
+# Load .env so GITHUB_TOKEN, QIITA_API_TOKEN, etc. are available when running from CLI
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 from rich.console import Console
 from rich.table import Table
 
 from backend.connectors.factory import build_connector
 from backend.denoise.filters import ItemRecord
 from backend.digest.generator import DigestGenerator
+from backend.digest.summarizer import LLMSummarizer
 from backend.pipeline.orchestrator import IngestOrchestrator
 from backend.storage.db import DatabaseManager
 from backend.storage.models import Digest as StorageDigest, Metric, Source
@@ -387,6 +393,65 @@ def digest(ctx, digest_date: Optional[str]):
                 )
                 await db.save_digest(storage_digest)
             console.print(f"[green]Saved digest for {date_str} (news={len(dig.news)}, tips={len(dig.tips)}, papers={len(dig.papers)}).[/green]")
+        finally:
+            await db.close()
+
+    run_async(_run())
+
+
+@cli.command()
+@click.option("--item-id", "item_id", default=None, help="Summarize only this favorite (default: all missing)")
+@click.pass_context
+def summarize_favorites(ctx, item_id: Optional[str]):
+    """Generate LLM summaries for favorites that don't have one yet. Uses config llm (local/OpenAI/mock)."""
+
+    async def _run():
+        db = DatabaseManager(ctx.obj["db_path"])
+        await db.initialize()
+        try:
+            config_path = ctx.obj["config_path"]
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            if not config:
+                config = {}
+
+            ids_to_summarize = await db.get_favorite_ids_missing_summary(item_id=item_id)
+            if not ids_to_summarize:
+                console.print("[yellow]No favorites need summarizing.[/yellow]")
+                return
+
+            def item_to_row(i):
+                return {
+                    "id": i.id,
+                    "source_id": i.source_id,
+                    "url": i.url,
+                    "title": i.title,
+                    "content": i.content or "",
+                    "author": i.author,
+                    "published_at": i.published_at.isoformat() if i.published_at else "",
+                    "ingested_at": i.ingested_at.isoformat() if i.ingested_at else "",
+                    "category": i.category,
+                    "language": i.language,
+                    "metadata": i.metadata or {},
+                }
+
+            records = []
+            for iid in ids_to_summarize:
+                item = await db.get_item(iid)
+                if item:
+                    records.append(ItemRecord.from_db_row(item_to_row(item)))
+
+            if not records:
+                console.print("[yellow]No items found for those favorites.[/yellow]")
+                return
+
+            with console.status("[bold green]Summarizing favorites..."):
+                summarizer = LLMSummarizer(config)
+                summaries = await summarizer.summarize(records)
+
+            for iid, summary in summaries.items():
+                await db.update_favorite_summary(iid, summary)
+            console.print(f"[green]Updated {len(summaries)} favorite summary/summaries.[/green]")
         finally:
             await db.close()
 

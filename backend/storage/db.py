@@ -353,6 +353,38 @@ class DatabaseManager:
         row = await cursor.fetchone()
         return row[0] if row else 0
 
+    # --- Favorites ---
+
+    async def get_favorite_ids_missing_summary(
+        self, item_id: Optional[str] = None
+    ) -> List[str]:
+        """Return favorite item_ids that have no summary yet. If item_id is set, return at most that one."""
+        assert self._conn is not None
+        try:
+            if item_id:
+                cursor = await self._conn.execute(
+                    "SELECT item_id FROM favorites WHERE item_id = ? AND (summary IS NULL OR summary = '')",
+                    (item_id,),
+                )
+            else:
+                cursor = await self._conn.execute(
+                    "SELECT item_id FROM favorites WHERE summary IS NULL OR summary = ''"
+                )
+            rows = await cursor.fetchall()
+            return [r[0] for r in rows]
+        except Exception:
+            return []
+
+    async def update_favorite_summary(self, item_id: str, summary: str) -> None:
+        """Set the summary for a favorite."""
+        assert self._conn is not None
+        async with self._write_lock:
+            await self._conn.execute(
+                "UPDATE favorites SET summary = ? WHERE item_id = ?",
+                (summary, item_id),
+            )
+            await self._conn.commit()
+
     # --- Metrics ---
 
     async def upsert_metrics(self, metrics: List[Metric]) -> int:

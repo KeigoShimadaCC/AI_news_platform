@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List
 
 import aiohttp
+from backend.connectors.content_fetcher import fetch_article_body
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -62,7 +64,15 @@ class APIConnector:
         if not url:
             return []
         params = self.params or source.config.get("params") or {}
-        headers = self.headers or self._resolve_headers(source.config.get("headers") or {})
+        # Resolve headers at fetch time so env vars (e.g. GITHUB_TOKEN, QIITA_API_TOKEN) are current
+        headers = self._resolve_headers(source.config.get("headers") or {})
+        if not headers.get("User-Agent"):
+            headers["User-Agent"] = DEFAULT_USER_AGENT
+        # GitHub classic PATs often require "token OAUTH-TOKEN" instead of "Bearer"
+        if "api.github.com" in url and headers.get("Authorization", "").startswith("Bearer "):
+            token = headers["Authorization"][7:].strip()
+            if token and (token.startswith("ghp_") or token.startswith("gho_")):
+                headers["Authorization"] = f"token {token}"
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -79,7 +89,20 @@ class APIConnector:
                         text = await resp.text()
                         return await self._fetch_arxiv_atom(text, source)
                     data = await resp.json()
-            return self._normalize_response(data, source)
+            if "github" in (source.id or "").lower() and isinstance(data.get("items"), list) and not data["items"]:
+                logger.info(
+                    "Source %s: GitHub API returned 0 items (query may be too strict). Try relaxing params in config.",
+                    source.id,
+                )
+            if "zenn" in (source.id or "").lower() and not (data.get("articles")):
+                logger.debug(
+                    "Zenn source %s: API returned empty articles (url=%s params=%s)",
+                    source.id, url, params,
+                )
+            items = self._normalize_response(data, source)
+            if items and "zenn" in (source.id or "").lower():
+                items = await self._enrich_zenn_content(items)
+            return items
         except aiohttp.ClientResponseError as e:
             if e.status in (401, 403):
                 logger.warning("Source %s: %s. Add token to .env if needed.", source.id, e)
@@ -119,6 +142,11 @@ class APIConnector:
     def _normalize_response(self, data: Any, source: "Source") -> List[Dict[str, Any]]:
         """Map API-specific response to list of raw item dicts. Override per API shape."""
         source_id = source.id
+        # Zenn topic articles (public JSON API; RSS feed often blocked for servers)
+        if "articles" in data and isinstance(data["articles"], list):
+            arts = data["articles"]
+            if arts and isinstance(arts[0], dict) and "path" in arts[0]:
+                return self._normalize_zenn_articles(arts, source_id)
         # HN Algolia
         if "hits" in data and isinstance(data["hits"], list):
             return self._normalize_hn_algolia(data["hits"], source_id)
@@ -225,3 +253,49 @@ class APIConnector:
                 "external_id": it.get("id"),
             })
         return out
+
+    def _normalize_zenn_articles(
+        self, articles: List[Dict], source_id: str
+    ) -> List[Dict[str, Any]]:
+        """Zenn public API: GET /api/articles?topic=llm|ai&order=latest&count=30."""
+        base = "https://zenn.dev"
+        out: List[Dict[str, Any]] = []
+        for a in articles:
+            path = a.get("path")
+            if not path:
+                continue
+            url = path if path.startswith("http") else (base + path)
+            user = a.get("user") or {}
+            author = user.get("name") or user.get("username") if isinstance(user, dict) else None
+            out.append({
+                "url": url,
+                "title": a.get("title", "Untitled"),
+                "content": "",  # Filled by _enrich_zenn_content via article-page fetch
+                "author": author,
+                "published_at": a.get("published_at"),
+                "metadata": {
+                    "liked_count": a.get("liked_count", 0),
+                    "body_letters_count": a.get("body_letters_count"),
+                },
+                "external_id": str(a.get("id", "")) or url,
+            })
+        return out
+
+    async def _enrich_zenn_content(
+        self, items: List[Dict[str, Any]], max_concurrent: int = 3
+    ) -> List[Dict[str, Any]]:
+        """Fetch each article page and set content from body. Rate-limited."""
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def fetch_one(item: Dict[str, Any]) -> None:
+            url = item.get("url")
+            if not url or item.get("content"):
+                return
+            async with sem:
+                body = await fetch_article_body(url)
+                if body:
+                    item["content"] = body[:50000]
+                await asyncio.sleep(0.3)
+
+        await asyncio.gather(*[fetch_one(it) for it in items])
+        return items

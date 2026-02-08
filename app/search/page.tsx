@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import type { SearchFilters, SearchResult } from "@/lib/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { SearchFilters, SearchResult, Source, Favorite } from "@/lib/types";
 import { SearchInput } from "@/components/SearchInput";
 import { Filters } from "@/components/Filters";
 import { ItemCard } from "@/components/ItemCard";
@@ -16,6 +16,7 @@ export default function SearchPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({});
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSetQuery = useCallback(
@@ -35,6 +36,42 @@ export default function SearchPage() {
     setFilters(newFilters);
     setPage(1);
   };
+
+  const { data: sourcesData } = useQuery<Source[]>({
+    queryKey: ["sources"],
+    queryFn: async () => {
+      const res = await fetch("/api/sources");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const sources = sourcesData ?? [];
+
+  const { data: favoritesData } = useQuery<Favorite[]>({
+    queryKey: ["favorites"],
+    queryFn: async () => {
+      const res = await fetch("/api/favorites");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const favoriteIds = new Set((favoritesData ?? []).map((f) => f.item_id));
+
+  const handleToggleFavorite = useCallback(
+    async (itemId: string) => {
+      const isFav = favoriteIds.has(itemId);
+      const method = isFav ? "DELETE" : "POST";
+      const url = isFav ? `/api/favorites?item_id=${encodeURIComponent(itemId)}` : "/api/favorites";
+      const res = await fetch(url, {
+        method,
+        ...(method === "POST" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item_id: itemId }) } : {}),
+      });
+      if (res.ok) {
+        await queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      }
+    },
+    [favoriteIds, queryClient]
+  );
 
   const { data, isLoading } = useQuery<SearchResult>({
     queryKey: ["search", debouncedQuery, filters, page],
@@ -67,7 +104,7 @@ export default function SearchPage() {
 
       <div className="space-y-4">
         <SearchInput value={query} onChange={handleQueryChange} />
-        <Filters filters={filters} onChange={handleFilterChange} />
+        <Filters filters={filters} onChange={handleFilterChange} sources={sources.map((s) => ({ id: s.id, label: s.id.replace(/_/g, " ") }))} />
 
         {data && data.total > 0 && (
           <p className="text-sm text-gray-500">
@@ -81,7 +118,12 @@ export default function SearchPage() {
           <>
             <div className="space-y-3">
               {data.items.map((item) => (
-                <ItemCard key={item.id} item={item} />
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  isFavorite={favoriteIds.has(item.id)}
+                  onToggleFavorite={handleToggleFavorite}
+                />
               ))}
             </div>
             <Pagination

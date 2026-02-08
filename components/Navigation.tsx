@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Newspaper, Search, Radio, Cpu } from "lucide-react";
+import { Newspaper, Search, Radio, Cpu, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/", label: "Digest", icon: Newspaper },
   { href: "/search", label: "Search", icon: Search },
+  { href: "/favorites", label: "Favorites", icon: Star },
   { href: "/sources", label: "Sources", icon: Radio },
 ];
 

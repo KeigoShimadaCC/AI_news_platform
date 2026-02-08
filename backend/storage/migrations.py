@@ -31,6 +31,19 @@ def _get_migrations() -> List[MigrationStep]:
                 "CREATE INDEX IF NOT EXISTS idx_items_batch ON items(fetch_batch_id);",
             ],
         ),
+        (
+            3,
+            "Add favorites table for saved items and summaries",
+            [
+                """CREATE TABLE IF NOT EXISTS favorites (
+                    item_id TEXT PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    summary TEXT,
+                    FOREIGN KEY (item_id) REFERENCES items(id)
+                );""",
+                "CREATE INDEX IF NOT EXISTS idx_favorites_created ON favorites(created_at DESC);",
+            ],
+        ),
     ]
 
 

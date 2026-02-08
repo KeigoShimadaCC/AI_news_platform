@@ -45,7 +45,8 @@ sources:
     type: api
     url: https://api.github.com/search/repositories
     params:
-      q: "topic:llm OR topic:ai OR topic:agent created:>2025-01-01"
+      # Relaxed query: topic filter only (created:> date can return 0 if index lags)
+      q: "topic:llm OR topic:ai OR topic:agent"
       sort: stars
       order: desc
       per_page: 30
@@ -81,23 +82,30 @@ sources:
     lang: en
     user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+  # Zenn: use public JSON API (topic feed). RSS /topics/.../feed is often blocked for server requests.
   - id: zenn_llm
-    type: rss
-    url: https://zenn.dev/topics/llm/feed
+    type: api
+    url: https://zenn.dev/api/articles
+    params:
+      topic: llm
+      order: latest
+      count: 30
     category: tips
     authority: 0.70
     refresh_hours: 12
     lang: ja
-    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: zenn_ai
-    type: rss
-    url: https://zenn.dev/topics/ai/feed
+    type: api
+    url: https://zenn.dev/api/articles
+    params:
+      topic: ai
+      order: latest
+      count: 30
     category: tips
     authority: 0.70
     refresh_hours: 12
     lang: ja
-    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: qiita_llm
     type: api
@@ -111,7 +119,8 @@ sources:
     refresh_hours: 12
     lang: ja
     headers:
-      Authorization: "Bearer ${QIITA_API_TOKEN}"  # Optional but recommended
+      # Set QIITA_API_TOKEN in .env to get items (401 without it)
+      Authorization: "Bearer ${QIITA_API_TOKEN}"
 
   - id: reddit_localllama
     type: rss

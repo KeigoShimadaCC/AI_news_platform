@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Newspaper, Lightbulb, BookOpen, RefreshCw, Zap, Sparkles } from "lucide-react";
-import type { Digest } from "@/lib/types";
+import type { Digest, Favorite } from "@/lib/types";
 import { ItemCard } from "@/components/ItemCard";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,36 @@ const tabs = [
 
 export function DigestTabs({ digest }: DigestTabsProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"news" | "tips" | "papers">("news");
+
+  const { data: favoritesData } = useQuery<Favorite[]>({
+    queryKey: ["favorites"],
+    queryFn: async () => {
+      const res = await fetch("/api/favorites");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const favoriteIds = new Set((favoritesData ?? []).map((f) => f.item_id));
+
+  const handleToggleFavorite = useCallback(
+    async (itemId: string) => {
+      const isFav = favoriteIds.has(itemId);
+      const method = isFav ? "DELETE" : "POST";
+      const url = isFav ? `/api/favorites?item_id=${encodeURIComponent(itemId)}` : "/api/favorites";
+      const res = await fetch(url, {
+        method,
+        ...(method === "POST"
+          ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item_id: itemId }) }
+          : {}),
+      });
+      if (res.ok) {
+        await queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      }
+    },
+    [queryClient]
+  );
 
   const ingestMutation = useMutation({
     mutationFn: async () => {
@@ -148,7 +177,12 @@ export function DigestTabs({ digest }: DigestTabsProps) {
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
-            <ItemCard key={item.id} item={item} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              isFavorite={favoriteIds.has(item.id)}
+              onToggleFavorite={handleToggleFavorite}
+            />
           ))}
         </div>
       )}

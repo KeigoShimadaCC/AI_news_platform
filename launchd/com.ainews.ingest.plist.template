@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ainews.ingest</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{WORKING_DIRECTORY}}/bin/ingest.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{{WORKING_DIRECTORY}}</string>
+    <key>StartInterval</key>
+    <integer>21600</integer>
+    <key>StandardOutPath</key>
+    <string>{{WORKING_DIRECTORY}}/data/logs/ainews-ingest.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{WORKING_DIRECTORY}}/data/logs/ainews-ingest.error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

@@ -1,0 +1,198 @@
+# AI News Platform Configuration
+# Add sources here without code changes - just edit this file!
+
+sources:
+  - id: openai_news
+    type: rss_or_scrape
+    url: https://openai.com/news/rss.xml
+    category: news
+    authority: 1.0
+    refresh_hours: 6
+    lang: en
+    user_agent: "Mozilla/5.0 (compatible; AINewsBot/1.0)"
+
+  - id: deepmind_blog
+    type: rss
+    url: https://deepmind.google/blog/feed/basic/
+    category: news
+    authority: 0.95
+    refresh_hours: 12
+    lang: en
+
+  - id: hf_blog
+    type: rss_or_scrape
+    url: https://huggingface.co/blog/feed.xml
+    category: news
+    authority: 0.85
+    refresh_hours: 12
+    lang: en
+
+  - id: hn_ai
+    type: api
+    url: https://hn.algolia.com/api/v1/search
+    params:
+      query: "(LLM OR agent OR RAG OR MCP)"
+      tags: story
+      hitsPerPage: 30
+    category: news
+    authority: 0.75
+    refresh_hours: 6
+    lang: en
+
+  - id: github_ai_repos
+    type: api
+    url: https://api.github.com/search/repositories
+    params:
+      q: "topic:llm OR topic:ai OR topic:agent created:>2025-01-01"
+      sort: stars
+      order: desc
+      per_page: 30
+    category: news
+    authority: 0.80
+    refresh_hours: 24
+    lang: en
+    headers:
+      Accept: "application/vnd.github.v3+json"
+
+  - id: arxiv_api_llm
+    type: api
+    url: http://export.arxiv.org/api/query
+    params:
+      search_query: "(cat:cs.CL OR cat:cs.AI OR cat:cs.LG) AND (abs:LLM OR abs:agent OR abs:RAG)"
+      start: 0
+      max_results: 50
+      sortBy: submittedDate
+      sortOrder: descending
+    category: paper
+    authority: 0.90
+    refresh_hours: 24
+    lang: en
+
+  - id: arxiv_rss_cscl
+    type: rss
+    url: https://rss.arxiv.org/rss/cs.CL
+    category: paper
+    authority: 0.85
+    refresh_hours: 24
+    lang: en
+
+  - id: zenn_llm
+    type: rss
+    url: https://zenn.dev/topics/llm/feed
+    category: tips
+    authority: 0.70
+    refresh_hours: 12
+    lang: ja
+
+  - id: zenn_ai
+    type: rss
+    url: https://zenn.dev/topics/ai/feed
+    category: tips
+    authority: 0.70
+    refresh_hours: 12
+    lang: ja
+
+  - id: qiita_llm
+    type: api
+    url: https://qiita.com/api/v2/items
+    params:
+      query: "tag:LLM OR tag:生成AI OR tag:ChatGPT"
+      per_page: 30
+      page: 1
+    category: tips
+    authority: 0.65
+    refresh_hours: 12
+    lang: ja
+    headers:
+      Authorization: "Bearer ${QIITA_API_TOKEN}"  # Optional but recommended
+
+  - id: reddit_localllama
+    type: rss
+    url: https://www.reddit.com/r/LocalLLaMA/.rss
+    category: tips
+    authority: 0.70
+    refresh_hours: 6
+    lang: en
+
+# Scoring configuration
+scoring:
+  weights:
+    authority: 0.30
+    recency: 0.25
+    popularity: 0.20
+    relevance: 0.20
+    dup_penalty: 0.05
+
+  keywords_exclude:
+    - "求人"
+    - "採用"
+    - "広告"
+    - "affiliate"
+    - "crypto"
+    - "NFT"
+    - "sponsored"
+    - "advertisement"
+
+  # Per-source quotas for digest
+  quotas:
+    arxiv_api_llm: 10
+    zenn_llm: 15
+    zenn_ai: 15
+    qiita_llm: 15
+    hn_ai: 15
+    github_ai_repos: 10
+    default: 20
+
+  # Minimum popularity thresholds
+  min_popularity:
+    hn_ai:
+      points: 50
+    reddit_localllama:
+      score: 30
+    github_ai_repos:
+      stars: 50
+
+# Category limits for daily digest
+digest:
+  limits:
+    news: 20
+    tips: 20
+    paper: 10
+
+# Schedule configuration (for launchd)
+schedule:
+  ingest_every_hours: 6
+  digest_daily_hour_local: 8
+
+# Performance tuning
+performance:
+  # Connector settings
+  max_concurrent_sources: 10
+  request_timeout_seconds: 30
+  max_retries: 3
+  retry_backoff_base: 2
+
+  # Storage settings
+  batch_size: 1000
+  enable_wal: true
+  cache_size_mb: 64
+
+  # Deduplication settings
+  similarity_threshold: 0.85
+  use_embeddings: false  # Set to true for better dedup (requires embedding model)
+
+  # Search settings
+  search_results_per_page: 50
+  fts_rank_weights: "1.0 0.5 0.3"  # title, content, metadata
+
+# LLM configuration for summarization
+llm:
+  provider: openai  # or: anthropic, local, mock
+  model: gpt-4o-mini
+  max_tokens: 150
+  temperature: 0.7
+  concurrent_requests: 10
+  cache_summaries: true
+  # For local models:
+  # local_url: http://localhost:11434/v1  # Ollama example
+  # local_model: llama3.2

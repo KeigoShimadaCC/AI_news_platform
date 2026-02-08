@@ -354,6 +354,8 @@ Sources may overlap. This is OK! The deduplication engine will cluster duplicate
 
 ### Adding Papers with Code (trending)
 
+**Note:** Papers with Code (PwC) is not included in v1 defaults due to reported service instability (e.g. 2025). For v1, prefer **arXiv** (API or RSS) or **Hugging Face Daily Papers** for papers. You can add PwC as an optional source if the service is available.
+
 ```yaml
   - id: papers_with_code
     type: api

@@ -257,6 +257,17 @@ class DatabaseManager:
         row = await cursor.fetchone()
         return row[0] if row else 0
 
+    async def get_items_for_date(self, date_str: str, limit: int = 5000) -> List[Item]:
+        """Load items whose published_at date equals date_str (YYYY-MM-DD)."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT * FROM items WHERE date(published_at) = ?
+               ORDER BY published_at DESC LIMIT ?""",
+            (date_str, limit),
+        )
+        rows = await cursor.fetchall()
+        return [Item.from_row(dict(r)) for r in rows]
+
     # --- Search ---
 
     async def search(

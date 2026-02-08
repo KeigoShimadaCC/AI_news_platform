@@ -9,6 +9,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse, urlunparse
 
+# Use shared canonical URL logic with denoise layer for consistent dedup
+def _canonicalize_url(url: str) -> str:
+    from backend.denoise.dedup import canonical_url
+    return canonical_url(url)
+
 
 @dataclass
 class Source:
@@ -77,14 +82,8 @@ class Item:
 
     @staticmethod
     def canonicalize_url(url: str) -> str:
-        """Normalize URL for deduplication."""
-        parsed = urlparse(url)
-        # Strip www., trailing slashes, fragments, common tracking params
-        host = parsed.hostname or ""
-        if host.startswith("www."):
-            host = host[4:]
-        path = parsed.path.rstrip("/") or "/"
-        return urlunparse(("https", host, path, "", "", ""))
+        """Normalize URL for deduplication (matches denoise.dedup.canonical_url)."""
+        return _canonicalize_url(url)
 
     def to_row(self) -> tuple:
         return (

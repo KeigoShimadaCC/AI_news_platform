@@ -71,9 +71,9 @@ fi
 # Create data directory
 mkdir -p data/snapshots
 
-# Initialize database (skip for now - migrations not yet implemented)
-# echo "🗄️  Initializing database..."
-# python -m backend.storage.migrations upgrade
+# Initialize database
+echo "🗄️  Initializing database..."
+python -m backend.storage.migrations upgrade
 
 # Setup launchd (macOS scheduled tasks)
 if [[ "$OSTYPE" == "darwin"* ]] && [[ "$1" == "--with-schedule" || "$1" == "--reload-launchd" ]]; then

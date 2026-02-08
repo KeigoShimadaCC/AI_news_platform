@@ -36,8 +36,8 @@ class ItemRecord:
 
     @classmethod
     def from_db_row(cls, row: dict[str, Any]) -> ItemRecord:
-        """Create from a DB row dict (items table)."""
-        meta_raw = row.get("metadata_json") or "{}"
+        """Create from a DB row dict (items table). Uses schema column names: metadata, ingested_at, language."""
+        meta_raw = row.get("metadata") or "{}"
         if isinstance(meta_raw, str):
             try:
                 meta = json.loads(meta_raw)
@@ -45,6 +45,12 @@ class ItemRecord:
                 meta = {}
         else:
             meta = meta_raw
+        ingested = row.get("ingested_at") or ""
+        if hasattr(ingested, "isoformat"):
+            ingested = ingested.isoformat()
+        published = row.get("published_at") or ""
+        if hasattr(published, "isoformat"):
+            published = published.isoformat()
         return cls(
             id=row["id"],
             source_id=row["source_id"],
@@ -52,9 +58,9 @@ class ItemRecord:
             title=row.get("title", ""),
             content=row.get("content", ""),
             author=row.get("author"),
-            published_at=row.get("published_at", ""),
-            fetched_at=row.get("fetched_at", ""),
-            lang=row.get("lang", "en"),
+            published_at=str(published),
+            fetched_at=str(ingested),
+            lang=row.get("language", row.get("lang", "en")),
             category=row.get("category", "news"),
             metadata=meta,
         )

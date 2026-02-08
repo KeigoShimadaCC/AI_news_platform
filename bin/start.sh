@@ -16,19 +16,15 @@ if [ ! -f .env ]; then
     echo "⚠️  .env not found, using defaults"
 fi
 
-# Note: Database initialization and ingest will be enabled once agents complete their work
-# DB_FILE="data/ainews.db"
-# if [ ! -f "$DB_FILE" ]; then
-#     echo "📥 First run - initializing database and ingesting sources..."
-#     python -m backend.storage.migrations upgrade
-#     python -m backend.pipeline.cli ingest --all --verbose
-#     python -m backend.pipeline.cli digest
-# fi
+# Ensure database exists and is migrated
+DB_FILE="data/ainews.db"
+if [ ! -f "$DB_FILE" ]; then
+    echo "📥 First run - initializing database..."
+    python -m backend.storage.migrations upgrade
+    echo "   To fetch content: python -m backend.pipeline.cli ingest --all && python -m backend.pipeline.cli digest"
+fi
 
-echo "⚠️  Backend components are still being built by agents."
-echo "For now, checking if Next.js UI is ready..."
-
-# Start Next.js in background (will be ready once Agent D completes)
+# Start Next.js in background
 echo "🌐 Starting web UI on http://localhost:3000"
 npm run dev > /tmp/ainews-ui.log 2>&1 &
 UI_PID=$!

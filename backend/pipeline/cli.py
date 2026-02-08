@@ -12,15 +12,20 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import click
+import yaml
 from rich.console import Console
 from rich.table import Table
 
+from backend.connectors.factory import build_connector
+from backend.denoise.filters import ItemRecord
+from backend.digest.generator import DigestGenerator
 from backend.pipeline.orchestrator import IngestOrchestrator
 from backend.storage.db import DatabaseManager
+from backend.storage.models import Digest as StorageDigest, Metric
 
 console = Console()
 
@@ -60,6 +65,7 @@ def ingest(ctx, all_sources: bool, source_id: Optional[str]):
         orchestrator = IngestOrchestrator(
             config_path=ctx.obj["config_path"],
             db_path=ctx.obj["db_path"],
+            connector_factory=build_connector,
         )
         await orchestrator.initialize()
         try:
@@ -228,6 +234,103 @@ def search(
                 )
 
             console.print(table)
+        finally:
+            await db.close()
+
+    run_async(_run())
+
+
+@cli.command()
+@click.option("--date", "digest_date", default=None, help="Digest date YYYY-MM-DD (default: today)")
+@click.pass_context
+def digest(ctx, digest_date: Optional[str]):
+    """Run the digest pipeline: load items for date, filter/dedup/score/quota/summarize, persist metrics and digests."""
+
+    async def _run():
+        db = DatabaseManager(ctx.obj["db_path"])
+        await db.initialize()
+        try:
+            config_path = ctx.obj["config_path"]
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            if not config:
+                config = {}
+
+            date_str = digest_date or date.today().isoformat()
+            try:
+                digest_date_obj = date.fromisoformat(date_str)
+            except ValueError:
+                console.print(f"[red]Invalid date:[/red] {date_str}")
+                sys.exit(1)
+
+            with console.status("[bold green]Loading items..."):
+                items = await db.get_items_for_date(date_str)
+            if not items:
+                console.print(f"[yellow]No items for date {date_str}. Run ingest first.[/yellow]")
+                await db.close()
+                return
+
+            # Convert Item to ItemRecord (row dict then from_db_row)
+            def item_to_row(i):
+                return {
+                    "id": i.id,
+                    "source_id": i.source_id,
+                    "url": i.url,
+                    "title": i.title,
+                    "content": i.content or "",
+                    "author": i.author,
+                    "published_at": i.published_at.isoformat() if i.published_at else "",
+                    "ingested_at": i.ingested_at.isoformat() if i.ingested_at else "",
+                    "category": i.category,
+                    "language": i.language,
+                    "metadata": i.metadata or {},
+                }
+
+            item_records = [ItemRecord.from_db_row(item_to_row(i)) for i in items]
+
+            with console.status("[bold green]Generating digest (filter, dedup, score, summarize)..."):
+                gen = DigestGenerator(config)
+                dig = await gen.generate_digest(item_records, digest_date=digest_date_obj)
+
+            # Build Metric rows for all items in the digest
+            now = datetime.utcnow()
+            metrics: list[Metric] = []
+            for section_items in (dig.news, dig.tips, dig.papers):
+                for di in section_items:
+                    metrics.append(
+                        Metric(
+                            item_id=di.item.id,
+                            score=di.score.total,
+                            score_authority=di.score.authority,
+                            score_recency=di.score.recency,
+                            score_popularity=di.score.popularity,
+                            score_relevance=di.score.relevance,
+                            dup_penalty=di.score.dup_penalty,
+                            cluster_id=di.item.cluster_id,
+                            summary_json={"summary": di.summary} if di.summary else None,
+                            computed_at=now,
+                        )
+                    )
+            await db.upsert_metrics(metrics)
+            console.print(f"[green]Upserted {len(metrics)} metrics.[/green]")
+
+            # Persist digest sections to digests table
+            d = dig.to_dict()
+            for section_name, section_key in [("news", "news"), ("tips", "tips"), ("paper", "papers")]:
+                section_list = d.get(section_key, [])
+                content_json = {"items": section_list}
+                content_markdown = "\n".join(
+                    f"- [{it.get('title', '')}]({it.get('url', '')})" for it in section_list
+                )
+                storage_digest = StorageDigest(
+                    id=None,
+                    date=date_str,
+                    section=section_name,
+                    content_markdown=content_markdown,
+                    content_json=content_json,
+                )
+                await db.save_digest(storage_digest)
+            console.print(f"[green]Saved digest for {date_str} (news={len(dig.news)}, tips={len(dig.tips)}, papers={len(dig.papers)}).[/green]")
         finally:
             await db.close()
 

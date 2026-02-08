@@ -54,6 +54,17 @@ _RELEVANCE_KEYWORDS = [
 _RELEVANCE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _RELEVANCE_KEYWORDS]
 
 
+def _get_raw_popularity(meta: dict[str, Any], source_id: str, field_hint: str | None) -> float:
+    """Get raw popularity value from metadata. field_hint prefers a specific key when set."""
+    if field_hint and isinstance(meta.get(field_hint), (int, float)):
+        return float(meta[field_hint])
+    for key in ("points", "score", "stars", "likes_count", "likes"):
+        val = meta.get(key)
+        if isinstance(val, (int, float)):
+            return float(val)
+    return 0.0
+
+
 class Scorer:
     """Compute a weighted multi-factor score for each item."""
 
@@ -70,7 +81,15 @@ class Scorer:
         for src in config.get("sources", []):
             self._source_authority[src["id"]] = src.get("authority", 0.5)
 
+        # Per-source popularity field from min_popularity (e.g. hn_ai→points, github_ai_repos→stars)
+        self._source_popularity_field: dict[str, str] = {}
+        min_pop = config.get("scoring", {}).get("min_popularity", {})
+        for src_id, thresh in min_pop.items():
+            if isinstance(thresh, dict) and thresh:
+                self._source_popularity_field[src_id] = next(iter(thresh.keys()))
+
         self._now = datetime.now(timezone.utc)
+        self._batch_source_max: dict[str, float] = {}
 
     def score_item(self, item: ItemRecord) -> ScoreBreakdown:
         """Compute the full score breakdown for a single item."""
@@ -99,9 +118,21 @@ class Scorer:
         )
 
     def score_items(self, items: list[ItemRecord]) -> list[tuple[ItemRecord, ScoreBreakdown]]:
-        """Score a batch of items. Uses vectorised NumPy where possible."""
+        """Score a batch of items. Uses per-source popularity normalization (log1p + max)."""
         if not items:
             return []
+
+        # Per-source max popularity for this batch (p95-style: cap then normalize)
+        self._batch_source_max = {}
+        for item in items:
+            field_hint = self._source_popularity_field.get(item.source_id)
+            raw = _get_raw_popularity(item.metadata, item.source_id, field_hint)
+            if raw > 0:
+                cur = self._batch_source_max.get(item.source_id, 0.0)
+                self._batch_source_max[item.source_id] = max(cur, raw)
+        for sid in self._batch_source_max:
+            if self._batch_source_max[sid] < 1:
+                self._batch_source_max[sid] = 1.0
 
         n = len(items)
         auth = np.empty(n)
@@ -158,22 +189,15 @@ class Scorer:
         return math.exp(-days_ago / 7.0)
 
     def _popularity(self, item: ItemRecord) -> float:
-        """Normalize popularity metrics to [0, 1] using log scaling."""
-        meta = item.metadata
-        # Try common popularity fields
-        raw = (
-            meta.get("points")
-            or meta.get("score")
-            or meta.get("stars")
-            or meta.get("likes_count")
-            or meta.get("likes")
-            or 0
-        )
-        if not isinstance(raw, (int, float)) or raw <= 0:
+        """Normalize popularity to [0, 1] per-source: log1p(raw) / log1p(max_for_source)."""
+        field_hint = self._source_popularity_field.get(item.source_id)
+        raw = _get_raw_popularity(item.metadata, item.source_id, field_hint)
+        if raw <= 0:
             return 0.0
-        # Log-scale normalization: log(1+x) / log(1+max_expected)
-        # We assume 1000 as a "very popular" benchmark
-        return min(1.0, math.log1p(raw) / math.log1p(1000))
+        max_for_source = self._batch_source_max.get(item.source_id)
+        if max_for_source is None or max_for_source < 1:
+            max_for_source = 1000.0
+        return min(1.0, math.log1p(raw) / math.log1p(max_for_source))
 
     def _relevance(self, item: ItemRecord) -> float:
         """Keyword-based relevance score in [0, 1]."""

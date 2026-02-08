@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Newspaper, Lightbulb, BookOpen, RefreshCw, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Newspaper, Lightbulb, BookOpen, RefreshCw, Zap, Sparkles } from "lucide-react";
 import type { Digest } from "@/lib/types";
 import { ItemCard } from "@/components/ItemCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -19,6 +20,7 @@ const tabs = [
 ];
 
 export function DigestTabs({ digest }: DigestTabsProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"news" | "tips" | "papers">("news");
 
   const ingestMutation = useMutation({
@@ -26,6 +28,17 @@ export function DigestTabs({ digest }: DigestTabsProps) {
       const res = await fetch("/api/ingest", { method: "POST", body: JSON.stringify({}) });
       if (!res.ok) throw new Error("Ingest failed");
       return res.json();
+    },
+  });
+
+  const generateDigestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/digest", { method: "POST", body: JSON.stringify({}) });
+      if (!res.ok) throw new Error("Generate digest failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      router.refresh();
     },
   });
 
@@ -75,19 +88,45 @@ export function DigestTabs({ digest }: DigestTabsProps) {
           })}
         </div>
 
-        <button
-          onClick={() => ingestMutation.mutate()}
-          disabled={ingestMutation.isPending}
-          className="btn-secondary text-xs"
-        >
-          {ingestMutation.isPending ? (
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <Zap className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          Refresh Sources
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => generateDigestMutation.mutate()}
+            disabled={generateDigestMutation.isPending}
+            className="btn-secondary text-xs"
+          >
+            {generateDigestMutation.isPending ? (
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Generate digest
+          </button>
+          <button
+            onClick={() => ingestMutation.mutate()}
+            disabled={ingestMutation.isPending}
+            className="btn-secondary text-xs"
+          >
+            {ingestMutation.isPending ? (
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Zap className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Refresh Sources
+          </button>
+        </div>
       </div>
+
+      {generateDigestMutation.isSuccess && (
+        <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
+          Digest generated. View updated below.
+        </div>
+      )}
+
+      {generateDigestMutation.isError && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          Failed to generate digest. Run ingest first to fetch items.
+        </div>
+      )}
 
       {ingestMutation.isSuccess && (
         <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">

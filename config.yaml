@@ -1,5 +1,6 @@
 # AI News Platform Configuration
 # Add sources here without code changes - just edit this file!
+# OpenAI and Hugging Face use rss_or_scrape (RSS with scrape fallback) per spec.
 
 sources:
   - id: openai_news

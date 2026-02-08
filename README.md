@@ -163,7 +163,15 @@ sources:
       limit: 50
 ```
 
-### 2. Add to quotas (optional)
+### 2. Sync to database
+
+After editing `config.yaml`, run so the DB has the latest source config (including new sources):
+
+```bash
+python -m backend.pipeline.cli sync-sources
+```
+
+### 3. Add to quotas (optional)
 
 ```yaml
 scoring:
@@ -171,7 +179,7 @@ scoring:
     my_new_source: 15
 ```
 
-### 3. Test
+### 4. Test
 
 ```bash
 python -m backend.pipeline.cli ingest --source my_new_source

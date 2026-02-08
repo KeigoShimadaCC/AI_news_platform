@@ -18,7 +18,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; AINewsBot/1.0; +https://github.com/ai-news-platform)"
+# Browser-like UA so more feeds (DeepMind, Zenn, arXiv, Reddit) accept requests
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 def _parse_entry(entry: Any, source_id: str, default_lang: str) -> Dict[str, Any] | None:
@@ -73,10 +74,12 @@ class RSSConnector:
                 request_headers={"User-Agent": self.user_agent},
                 response_headers=True,
             )
-            if getattr(feed, "bozo", False) and feed.bozo_exception:
+            entries = getattr(feed, "entries", [])
+            # Only raise on parse error if we got no entries; minor bozo with entries is OK
+            if getattr(feed, "bozo", False) and feed.bozo_exception and not entries:
                 raise feed.bozo_exception
             items: List[Dict[str, Any]] = []
-            for entry in getattr(feed, "entries", []):
+            for entry in entries:
                 row = _parse_entry(entry, source.id, self.lang)
                 if row:
                     items.append(row)

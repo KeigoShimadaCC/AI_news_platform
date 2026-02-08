@@ -19,6 +19,7 @@ sources:
     authority: 0.95
     refresh_hours: 12
     lang: en
+    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: hf_blog
     type: rss_or_scrape
@@ -54,6 +55,8 @@ sources:
     lang: en
     headers:
       Accept: "application/vnd.github.v3+json"
+      # Set GITHUB_TOKEN in .env to avoid 403 rate limit (unauthenticated is very limited)
+      Authorization: "Bearer ${GITHUB_TOKEN}"
 
   - id: arxiv_api_llm
     type: api
@@ -76,6 +79,7 @@ sources:
     authority: 0.85
     refresh_hours: 24
     lang: en
+    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: zenn_llm
     type: rss
@@ -84,6 +88,7 @@ sources:
     authority: 0.70
     refresh_hours: 12
     lang: ja
+    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: zenn_ai
     type: rss
@@ -92,6 +97,7 @@ sources:
     authority: 0.70
     refresh_hours: 12
     lang: ja
+    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: qiita_llm
     type: api
@@ -114,6 +120,8 @@ sources:
     authority: 0.70
     refresh_hours: 6
     lang: en
+    # Reddit requires a descriptive User-Agent; default is browser-like
+    user_agent: "python:ainews:1.0 (RSS reader; +https://github.com/ai-news-platform)"
 
 # Scoring configuration
 scoring:

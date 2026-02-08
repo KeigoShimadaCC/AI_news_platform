@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; AINewsBot/1.0)"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 class APIConnector:
@@ -31,15 +31,21 @@ class APIConnector:
         self.source_id = config.get("id", "")
 
     def _resolve_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
-        """Resolve ${ENV_VAR} in header values."""
+        """Resolve ${ENV_VAR} in header values (inline). Skip headers with empty resolved value (e.g. missing token)."""
         import os
+        import re
         out: Dict[str, str] = {}
+        pattern = re.compile(r"\$\{(\w+)\}")
+
+        def resolve(val: str) -> str:
+            return pattern.sub(lambda m: os.environ.get(m.group(1), ""), val)
+
         for k, v in headers.items():
-            if isinstance(v, str) and v.startswith("${") and v.endswith("}"):
-                key = v[2:-1].strip()
-                out[k] = os.environ.get(key, "")
-            else:
-                out[k] = str(v)
+            s = resolve(str(v)).strip()
+            # Skip Authorization (and similar) when value is empty or just "Bearer "
+            if not s or (k.lower() == "authorization" and s.lower() == "bearer"):
+                continue
+            out[k] = s
         if "User-Agent" not in out:
             out["User-Agent"] = DEFAULT_USER_AGENT
         return out
@@ -58,16 +64,27 @@ class APIConnector:
         params = self.params or source.config.get("params") or {}
         headers = self.headers or self._resolve_headers(source.config.get("headers") or {})
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, headers=headers) as resp:
-                resp.raise_for_status()
-                # arXiv API returns Atom XML
-                if "arxiv" in url.lower():
-                    text = await resp.text()
-                    return await self._fetch_arxiv_atom(text, source)
-                data = await resp.json()
-
-        return self._normalize_response(data, source)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=headers) as resp:
+                    if resp.status in (401, 403):
+                        logger.warning(
+                            "Source %s returned %s (auth/rate limit). Set token in .env if required.",
+                            source.id, resp.status,
+                        )
+                        return []
+                    resp.raise_for_status()
+                    # arXiv API returns Atom XML
+                    if "arxiv" in url.lower():
+                        text = await resp.text()
+                        return await self._fetch_arxiv_atom(text, source)
+                    data = await resp.json()
+            return self._normalize_response(data, source)
+        except aiohttp.ClientResponseError as e:
+            if e.status in (401, 403):
+                logger.warning("Source %s: %s. Add token to .env if needed.", source.id, e)
+                return []
+            raise
 
     async def _fetch_arxiv_atom(self, xml_text: str, source: "Source") -> List[Dict[str, Any]]:
         """Parse arXiv Atom XML and return raw items."""

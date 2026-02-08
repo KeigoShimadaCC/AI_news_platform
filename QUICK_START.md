@@ -41,7 +41,7 @@ nano .env  # or use your favorite editor
 Add your API keys (all optional but recommended):
 
 ```env
-# LLM for summaries (choose one)
+# LLM for summaries (choose one; or use local Ollama - see README "Local Ollama (model in project)")
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
@@ -286,7 +286,7 @@ PORT=3001 npm run dev
 1. **Customize sources**: Edit `config.yaml` to add/remove sources
 2. **Tune scoring**: Adjust weights in `config.yaml` → `scoring.weights`
 3. **Set quotas**: Limit items per source in `config.yaml` → `scoring.quotas`
-4. **Configure LLM**: Change provider in `config.yaml` → `llm.provider`
+4. **Configure LLM**: Change provider in `config.yaml` → `llm.provider`. For local model in project (no API key): run `./bin/start-ollama.sh`, pull model once, then set `llm.provider: local` (see README).
 5. **Schedule updates**: Run `./bin/setup.sh --with-schedule`
 
 ## Learn More

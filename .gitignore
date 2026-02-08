@@ -38,6 +38,9 @@ out/
 .env.production.local
 .env.development.local
 
+# Ollama models (project-local; see bin/start-ollama.sh)
+models/
+
 # Database & Data
 data/ainews.db
 data/ainews.db-shm

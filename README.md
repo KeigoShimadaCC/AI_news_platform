@@ -271,6 +271,15 @@ Summaries (“why it matters” for each item) use the **same LLM** for both the
 - **openai** / **anthropic**: Uses `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`; set `llm.model` (e.g. `gpt-4o-mini`).
 - **local**: Talks to an Ollama-compatible API at `llm.local_url` (default `http://localhost:11434/v1`) with `llm.local_model` (e.g. `llama3.2`). Run Ollama locally and start a model to use this.
 
+#### Local Ollama (model in project)
+
+To keep model files under the project (no API cost, no cloud):
+
+1. Install [Ollama](https://ollama.com).
+2. From the project root, run `./bin/start-ollama.sh` and leave it running.
+3. First time only, in another terminal: `OLLAMA_MODELS=./models ollama pull smollm:1.7b` (or the model name in `config.yaml` → `llm.local_model`).
+4. Set `llm.provider: local` and `llm.local_model` in `config.yaml`; no API keys needed. Models are stored in `models/` (gitignored).
+
 Favorites store saved items; use **“Generate summaries”** on the Favorites page to run the configured LLM on favorites that don’t have a summary yet (same backend as digest).
 
 ## Troubleshooting

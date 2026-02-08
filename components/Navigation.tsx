@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Newspaper, Search, Radio, Cpu, Star } from "lucide-react";
+import { Newspaper, Search, Radio, Cpu, Star, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -10,6 +10,7 @@ const links = [
   { href: "/search", label: "Search", icon: Search },
   { href: "/favorites", label: "Favorites", icon: Star },
   { href: "/sources", label: "Sources", icon: Radio },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Navigation() {

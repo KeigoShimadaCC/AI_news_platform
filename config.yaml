@@ -45,8 +45,8 @@ sources:
     type: api
     url: https://api.github.com/search/repositories
     params:
-      # Relaxed query: topic filter only (created:> date can return 0 if index lags)
-      q: "topic:llm OR topic:ai OR topic:agent"
+      # Single topic (OR of multiple topic: qualifiers can trigger 422; use one broad topic)
+      q: "llm in:topics"
       sort: stars
       order: desc
       per_page: 30
@@ -55,7 +55,7 @@ sources:
     refresh_hours: 24
     lang: en
     headers:
-      Accept: "application/vnd.github.v3+json"
+      Accept: "application/vnd.github+json"
       # Set GITHUB_TOKEN in .env to avoid 403 rate limit (unauthenticated is very limited)
       Authorization: "Bearer ${GITHUB_TOKEN}"
 
@@ -132,6 +132,70 @@ sources:
     # Reddit requires a descriptive User-Agent; default is browser-like
     user_agent: "python:ainews:1.0 (RSS reader; +https://github.com/ai-news-platform)"
 
+  # --- Startup / VC / Industry additions ---
+  - id: techcrunch_main
+    type: rss
+    url: https://techcrunch.com/feed/
+    category: news
+    authority: 0.78
+    refresh_hours: 6
+    lang: en
+    notes: "Broad startup coverage; rely on keyword filter + quotas."
+
+  - id: techcrunch_ai_category
+    type: rss
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+    category: news
+    authority: 0.80
+    refresh_hours: 6
+    lang: en
+    notes: "AI vertical feed; still noisy."
+
+  - id: venturebeat_rss
+    type: rss_or_scrape
+    url: https://venturebeat.com/category/ai/feed
+    category: news
+    authority: 0.76
+    refresh_hours: 6
+    lang: en
+    notes: "RSS first; scrape fallback if feed unavailable."
+
+  - id: a16z_future_feed
+    type: rss
+    url: https://future.com/feed
+    category: tips
+    authority: 0.82
+    refresh_hours: 24
+    lang: en
+    notes: "Investor/operator essays; treat as tips/perspective."
+
+  - id: theregister_ai_ml
+    type: rss
+    url: https://www.theregister.com/software/ai_ml/headlines.atom
+    category: news
+    authority: 0.70
+    refresh_hours: 12
+    lang: en
+    notes: "Good for tooling + enterprise AI; filter hard."
+
+  - id: strictlyvc_podcast
+    type: rss
+    url: https://feeds.megaphone.fm/YFL5140015188
+    category: tips
+    authority: 0.60
+    refresh_hours: 24
+    lang: en
+    notes: "VC context; only keep AI-tagged episodes."
+
+  - id: sequoia_training_data
+    type: rss
+    url: https://feeds.megaphone.fm/trainingdata
+    category: tips
+    authority: 0.75
+    refresh_hours: 24
+    lang: en
+    notes: "High-signal interviews with AI builders."
+
 # Scoring configuration
 scoring:
   weights:
@@ -159,6 +223,13 @@ scoring:
     qiita_llm: 15
     hn_ai: 15
     github_ai_repos: 10
+    techcrunch_main: 6
+    techcrunch_ai_category: 10
+    venturebeat_rss: 10
+    a16z_future_feed: 3
+    theregister_ai_ml: 8
+    strictlyvc_podcast: 4
+    sequoia_training_data: 5
     default: 20
 
   # Minimum popularity thresholds
@@ -205,12 +276,12 @@ performance:
 
 # LLM configuration for summarization
 llm:
-  provider: openai  # or: anthropic, local, mock
+  provider: local  # or: openai, anthropic, mock
   model: gpt-4o-mini
   max_tokens: 150
   temperature: 0.7
   concurrent_requests: 10
   cache_summaries: true
-  # For local models:
-  # local_url: http://localhost:11434/v1  # Ollama example
-  # local_model: llama3.2
+  # Local Ollama: model files go under project models/ when started with OLLAMA_MODELS=./models
+  local_url: http://localhost:11434/v1
+  local_model: smollm:1.7b

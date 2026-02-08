@@ -125,13 +125,15 @@ class IngestOrchestrator:
         summary = IngestSummary()
         t0 = time.monotonic()
 
-        # Step 1: Load sources
+        # Step 1: Load sources from config, then filter by DB enabled flag
         sources = self._get_sources(config, source_ids)
+        disabled_ids = await self.db.get_disabled_source_ids()
+        sources = [s for s in sources if s.id not in disabled_ids]
         if not sources:
-            logger.warning("No sources to ingest")
+            logger.warning("No sources to ingest (none enabled or none match filter)")
             return summary
 
-        # Sync sources to DB
+        # Sync sources to DB (preserves existing enabled flag on update)
         for source in sources:
             await self.db.upsert_source(source)
 

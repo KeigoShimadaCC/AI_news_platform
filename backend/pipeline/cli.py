@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -25,7 +26,7 @@ from backend.denoise.filters import ItemRecord
 from backend.digest.generator import DigestGenerator
 from backend.pipeline.orchestrator import IngestOrchestrator
 from backend.storage.db import DatabaseManager
-from backend.storage.models import Digest as StorageDigest, Metric
+from backend.storage.models import Digest as StorageDigest, Metric, Source
 
 console = Console()
 
@@ -103,6 +104,61 @@ def ingest(ctx, all_sources: bool, source_id: Optional[str]):
             console.print(table)
         finally:
             await orchestrator.close()
+
+    run_async(_run())
+
+
+@cli.command()
+@click.pass_context
+def sync_sources(ctx):
+    """Sync config.yaml sources into the database (so they appear before first ingest)."""
+
+    async def _run():
+        import yaml
+        db = DatabaseManager(ctx.obj["db_path"])
+        await db.initialize()
+        try:
+            with open(ctx.obj["config_path"], "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            sources_cfg = config.get("sources", [])
+            if not sources_cfg:
+                console.print("[yellow]No sources in config.[/yellow]")
+                return
+            for cfg in sources_cfg:
+                source = Source.from_config(cfg)
+                await db.upsert_source(source)
+            console.print(f"[green]Synced {len(sources_cfg)} sources to database.[/green]")
+        finally:
+            await db.close()
+
+    run_async(_run())
+
+
+@cli.command()
+@click.option("--id", "source_id", required=True, help="Source ID")
+@click.option("--enabled", required=True, type=click.Choice(["true", "false"]), help="Enable (true) or disable (false)")
+@click.pass_context
+def source(ctx, source_id: str, enabled: str):
+    """Set a source's enabled flag (for ingest inclusion)."""
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", source_id):
+        console.print("[red]Error:[/red] Invalid source ID")
+        sys.exit(1)
+
+    enabled_bool = enabled == "true"
+
+    async def _run():
+        db = DatabaseManager(ctx.obj["db_path"])
+        await db.initialize()
+        try:
+            existing = await db.get_source(source_id)
+            if not existing:
+                console.print(f"[red]Error:[/red] Source '{source_id}' not found. Run sync-sources first.")
+                sys.exit(1)
+            await db.update_source_enabled(source_id, enabled_bool)
+            console.print(f"[green]Source '{source_id}' set to {'enabled' if enabled_bool else 'disabled'}.[/green]")
+        finally:
+            await db.close()
 
     run_async(_run())
 

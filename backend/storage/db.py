@@ -88,7 +88,7 @@ class DatabaseManager:
     # --- Sources ---
 
     async def upsert_source(self, source: Source) -> None:
-        """Insert or update a source."""
+        """Insert or update a source. On update, preserves existing enabled flag."""
         assert self._conn is not None
         async with self._write_lock:
             await self._conn.execute(
@@ -98,8 +98,7 @@ class DatabaseManager:
                        config=excluded.config,
                        last_fetch_at=excluded.last_fetch_at,
                        last_error=excluded.last_error,
-                       error_count=excluded.error_count,
-                       enabled=excluded.enabled""",
+                       error_count=excluded.error_count""",
                 source.to_row(),
             )
             await self._conn.commit()
@@ -121,6 +120,25 @@ class DatabaseManager:
         )
         rows = await cursor.fetchall()
         return [Source.from_row(dict(r)) for r in rows]
+
+    async def get_disabled_source_ids(self) -> List[str]:
+        """Return source ids that are disabled (enabled = 0)."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT id FROM sources WHERE enabled = 0"
+        )
+        rows = await cursor.fetchall()
+        return [r[0] for r in rows]
+
+    async def update_source_enabled(self, source_id: str, enabled: bool) -> None:
+        """Set enabled flag for a source."""
+        assert self._conn is not None
+        async with self._write_lock:
+            await self._conn.execute(
+                "UPDATE sources SET enabled = ? WHERE id = ?",
+                (1 if enabled else 0, source_id),
+            )
+            await self._conn.commit()
 
     async def update_source_status(
         self,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
   Radio,
   CheckCircle2,
@@ -8,6 +9,8 @@ import {
   RefreshCw,
   Clock,
   Hash,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import type { Source } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
@@ -18,6 +21,8 @@ interface SourcesTableProps {
 }
 
 export function SourcesTable({ sources }: SourcesTableProps) {
+  const router = useRouter();
+
   const ingestMutation = useMutation({
     mutationFn: async (sourceId: string) => {
       const res = await fetch("/api/ingest", {
@@ -28,13 +33,27 @@ export function SourcesTable({ sources }: SourcesTableProps) {
       if (!res.ok) throw new Error("Ingest failed");
       return res.json();
     },
+    onSuccess: () => router.refresh(),
+  });
+
+  const setEnabledMutation = useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
+      const res = await fetch("/api/sources", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      if (!res.ok) throw new Error("Failed to update source");
+      return res.json();
+    },
+    onSuccess: () => router.refresh(),
   });
 
   if (sources.length === 0) {
     return (
       <EmptyState
         title="No sources configured"
-        description="Sources are defined in config.yaml. Run an initial ingest to populate the sources table."
+        description="Sources are defined in config.yaml. Run an initial ingest to fetch content from all enabled sources."
         action={
           <button
             onClick={() => ingestMutation.mutate("")}
@@ -130,21 +149,44 @@ export function SourcesTable({ sources }: SourcesTableProps) {
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => ingestMutation.mutate(source.id)}
-                    disabled={ingestMutation.isPending}
-                    className="btn-ghost text-xs p-1.5"
-                    title={`Refresh ${source.id}`}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        "h-3.5 w-3.5",
-                        ingestMutation.isPending &&
-                          ingestMutation.variables === source.id &&
-                          "animate-spin"
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() =>
+                        setEnabledMutation.mutate({
+                          id: source.id,
+                          enabled: !(source.enabled === true || source.enabled === 1),
+                        })
+                      }
+                      disabled={setEnabledMutation.isPending}
+                      className="btn-ghost text-xs p-1.5"
+                      title={
+                        source.enabled === false
+                          ? `Enable ${source.id}`
+                          : `Disable ${source.id} (excluded from next ingest)`
+                      }
+                    >
+                      {source.enabled === false ? (
+                        <Power className="h-3.5 w-3.5 text-gray-400" />
+                      ) : (
+                        <PowerOff className="h-3.5 w-3.5 text-green-600" />
                       )}
-                    />
-                  </button>
+                    </button>
+                    <button
+                      onClick={() => ingestMutation.mutate(source.id)}
+                      disabled={ingestMutation.isPending}
+                      className="btn-ghost text-xs p-1.5"
+                      title={`Refresh ${source.id}`}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          ingestMutation.isPending &&
+                            ingestMutation.variables === source.id &&
+                            "animate-spin"
+                        )}
+                      />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

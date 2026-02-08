@@ -68,12 +68,16 @@ if [ ! -f .env ]; then
     echo "⚠️  Please edit .env with your API keys"
 fi
 
-# Create data directory
-mkdir -p data/snapshots
+# Create data directory and logs for launchd
+mkdir -p data/snapshots data/logs
 
 # Initialize database
 echo "🗄️  Initializing database..."
 python -m backend.storage.migrations upgrade
+
+# Sync sources from config so they appear in the UI before first ingest
+echo "📋 Syncing sources from config..."
+python -m backend.pipeline.cli sync-sources
 
 # Setup launchd (macOS scheduled tasks)
 if [[ "$OSTYPE" == "darwin"* ]] && [[ "$1" == "--with-schedule" || "$1" == "--reload-launchd" ]]; then

@@ -19,7 +19,7 @@
 
 # 2. Configure (optional)
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with API keys for full functionality (see "API keys and rate limits" below)
 
 # 3. Start the platform
 ./bin/start.sh
@@ -69,7 +69,8 @@ AI_news_platform/
 │   └── item/[id]/          # Item details
 ├── data/                   # Local data storage
 │   ├── ainews.db           # SQLite database
-│   └── snapshots/          # HTML/JSON snapshots
+│   ├── snapshots/          # HTML/JSON snapshots
+│   └── logs/               # launchd ingest/digest logs (optional)
 ├── bin/                    # Utility scripts
 │   ├── setup.sh            # Installation
 │   ├── start.sh            # Startup
@@ -236,6 +237,21 @@ performance:
 ```
 
 Requires: `pip install sentence-transformers`
+
+## API Keys and Rate Limits
+
+Some sources need API keys or tokens for higher rate limits or access. Without them, the app still runs but those sources may fail or be throttled.
+
+| Variable | Used by | Notes |
+|----------|---------|--------|
+| `OPENAI_API_KEY` | Digest "why it matters" summaries | Default is mock summaries; set for real LLM summaries. |
+| `ANTHROPIC_API_KEY` | Same (if `llm.provider: anthropic` in config) | Alternative to OpenAI. |
+| `QIITA_API_TOKEN` | Qiita API connector | Unauthenticated: 60 req/h. With token: 1000 req/h. |
+| `GITHUB_TOKEN` | GitHub Search API connector | Unauthenticated: strict limit; token avoids 403. |
+
+- **RSS sources** (OpenAI, DeepMind, Zenn, Reddit, etc.) generally work without keys; some feeds may block certain clients (we use fallback where configured).
+- **Digest summaries**: With `llm.provider: mock` (default in config), no key is needed; summaries are placeholder. Set `OPENAI_API_KEY` (or Anthropic) and `llm.provider: openai` for real summaries.
+- If a source repeatedly fails, check `/sources` for the error, add the right env var if needed, or disable the source from the Sources page.
 
 ## Troubleshooting
 

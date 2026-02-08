@@ -5,6 +5,9 @@ set -e
 cd "$(dirname "$0")/.."
 source venv/bin/activate
 
+# Ensure log directory exists (for launchd redirects)
+mkdir -p data/logs
+
 # Load environment
 if [ -f .env ]; then
     export $(cat .env | grep -v '^#' | xargs)
